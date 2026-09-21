@@ -139,11 +139,142 @@ button.danger:hover:not(:disabled) { background: var(--danger-hover); }
 
 .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 
-input[type="range"] {
+/* 统一时间轴：原生 range + 循环区间覆盖层 */
+.timeline {
+  position: relative;
   width: 100%;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.timeline input[type="range"] {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.timeline input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.timeline input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.timeline input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px; /* (14 - 4) / 2，与轨道居中对齐 */
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.timeline input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+/* 循环区间高亮条 */
+.loop-range {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.65;
+  display: none;
+  pointer-events: none;
+}
+
+.loop-range.active {
+  background: var(--accent);
+  opacity: 1;
+  height: 6px;
+  box-shadow: 0 0 6px rgba(79, 140, 255, 0.55);
+}
+
+.loop-range.invalid { background: var(--danger); opacity: 0.8; }
+
+/* 入点（▼）/ 出点（▲）标记 */
+.loop-mark {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  pointer-events: none;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.loop-mark#loopInMark { transform: translate(-50%, -9px); }
+.loop-mark#loopOutMark { transform: translate(-50%, calc(-50% + 10px)); }
+.loop-mark#loopInMark::after { content: "▼"; }
+.loop-mark#loopOutMark::after { content: "▲"; }
+.loop-mark.active { color: var(--accent); }
+.loop-mark.invalid { color: var(--danger); }
+
+/* 片段循环控制栏 */
+.loop-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loop-bar button {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.loop-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.loop-toggle input {
+  width: 1rem;
+  height: 1rem;
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+.loop-toggle input:disabled { cursor: not-allowed; }
+
+.loop-info {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.loop-info.active { color: var(--accent); }
+.loop-info.warn { color: var(--danger); }
 
 /* 电平匹配 */
 .level-match {

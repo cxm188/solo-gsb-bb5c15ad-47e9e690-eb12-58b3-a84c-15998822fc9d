@@ -65,7 +65,23 @@
           <button id="btnPlay" class="primary">▶ 播放</button>
           <span id="timeLabel" class="time">0:00.0 / 0:00.0</span>
         </div>
-        <input type="range" id="seek" min="0" max="1" step="0.01" value="0" aria-label="播放进度">
+        <div class="timeline">
+          <div id="loopRange" class="loop-range" aria-hidden="true"></div>
+          <div id="loopInMark" class="loop-mark" aria-hidden="true"></div>
+          <div id="loopOutMark" class="loop-mark" aria-hidden="true"></div>
+          <input type="range" id="seek" min="0" max="1" step="0.01" value="0" aria-label="播放进度">
+        </div>
+
+        <div class="loop-bar">
+          <button id="btnLoopIn" type="button" title="在当前播放位置设置循环入点">入点</button>
+          <button id="btnLoopOut" type="button" title="在当前播放位置设置循环出点">出点</button>
+          <button id="btnLoopClear" type="button" disabled title="清除循环入点 / 出点">清除</button>
+          <label class="loop-toggle" title="开启后播放到出点自动回到入点；切换音源、换题、拖动进度均不影响该区间">
+            <input type="checkbox" id="chkLoop" disabled>
+            <span>片段循环</span>
+          </label>
+          <p id="loopInfo" class="loop-info">未设置循环区间</p>
+        </div>
 
         <div class="level-match">
           <label class="lm-toggle" title="解码后在统一时间轴内汇总各声道样本计算 RMS，以较安静音源为基准仅衰减较响者（-24～0 dB）；A / B / X 按同一规则生效">
@@ -87,6 +103,7 @@
 
         <button id="btnSubmit" class="danger" disabled>提交并揭晓答案</button>
         <p class="hint">提示：在 A / B / X 之间切换时，播放位置与暂停状态保持不变；可随时返回已答题目修改答案，提交后一次性揭晓。</p>
+        <p class="hint">片段循环：先定位到目标位置再点「入点 / 出点」（区间至少 0.5 秒，且不会超出统一时间轴），开启「片段循环」后播放到出点自动从入点继续；切换 A / B / X、换题或拖动进度均保持该区间与播放状态，点「清除」一键取消。</p>
       </div>
     </section>
 
