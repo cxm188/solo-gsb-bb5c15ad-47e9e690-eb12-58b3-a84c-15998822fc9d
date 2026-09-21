@@ -6,6 +6,9 @@
  * - A / B 解码一次，X 按题解码并缓存
  * - 切换音源 / 切换题目时保持播放位置与暂停状态
  * - 统一时间轴 = min(A 时长, B 时长)
+ * - 片段循环：入点 / 出点基于统一时间轴（区间 ≥ 0.5 秒），启用时用
+ *   AudioBufferSourceNode 原生 loop 在出点处采样级跳回入点；切换音源 /
+ *   换题 / 拖动进度后循环区间与播放 / 暂停状态保持，且不会越过较短音频
  * - 可选电平匹配：统一时间轴内汇总各声道样本计算 RMS，
  *   以较安静音源为基准仅衰减较响者（-24～0 dB），A / B / X 各经一个 GainNode
  */
@@ -65,6 +68,11 @@ const gainDb = { A: 0, B: 0, X: 0 };      // 各音源调整量（dB，≤ 0）
 let levelRef = null;         // 基准 RMS（较安静音源）；A/B RMS 无效时为 null
 let levelMatchOn = false;    // 开关状态
 
+// 片段循环：入点 / 出点（秒，基于统一时间轴；null = 未设置）
+const MIN_LOOP = 0.5;        // 循环区间最短时长（秒）
+let loopIn = null;
+let loopOut = null;
+
 // ---------------------------------------------------------------------------
 // 视图切换
 // ---------------------------------------------------------------------------
@@ -80,7 +88,12 @@ function show(viewId) {
 
 function position() {
   if (!playing) return startOffset;
-  return Math.min(startOffset + actx.currentTime - startCtxTime, timeline);
+  const t = startOffset + actx.currentTime - startCtxTime;
+  // 循环播放中：到达出点后从入点继续，显示位置在 [入点, 出点) 内回绕
+  if (loopActive() && startOffset < loopOut && t >= loopOut) {
+    return loopIn + ((t - loopIn) % (loopOut - loopIn));
+  }
+  return Math.min(t, timeline);
 }
 
 function stopSource() {
@@ -96,20 +109,31 @@ function play() {
   if (playing || !buffers[currentSrc]) return;
   if (startOffset >= timeline) startOffset = 0;
   const buf = buffers[currentSrc];
+  // 循环启用且起点在出点之前：用原生 loop，到达出点（loopEnd）即采样级
+  // 精确跳回入点（loopStart）；loopIn/loopOut ≤ timeline ≤ 各音源时长，
+  // 因此不会越过较短音频的有效时长
+  const useLoop = loopActive() && startOffset < loopOut;
   const remain = Math.max(0, Math.min(timeline, buf.duration) - startOffset);
-  if (remain <= 0) return;
+  if (!useLoop && remain <= 0) return;
 
   sourceNode = actx.createBufferSource();
   sourceNode.buffer = buf;
   sourceNode.connect(gains[currentSrc]); // 经各音源的 GainNode 输出（电平匹配）
-  sourceNode.onended = () => {
-    // 自然播放到时间轴末尾
-    sourceNode = null;
-    playing = false;
-    startOffset = 0;
-    updatePlayBtn();
-  };
-  sourceNode.start(0, startOffset, remain);
+  if (useLoop) {
+    sourceNode.loop = true;
+    sourceNode.loopStart = loopIn;
+    sourceNode.loopEnd = loopOut;
+    sourceNode.start(0, startOffset);
+  } else {
+    sourceNode.onended = () => {
+      // 自然播放到时间轴末尾
+      sourceNode = null;
+      playing = false;
+      startOffset = 0;
+      updatePlayBtn();
+    };
+    sourceNode.start(0, startOffset, remain);
+  }
   startCtxTime = actx.currentTime;
   playing = true;
   updatePlayBtn();
@@ -143,6 +167,86 @@ function seekTo(t) {
   startOffset = Math.max(0, Math.min(t, timeline));
   if (wasPlaying) play();
   updateTransport();
+}
+
+// ---------------------------------------------------------------------------
+// 片段循环：在统一时间轴上设置入点 / 出点，播放到出点即从入点继续
+// ---------------------------------------------------------------------------
+
+/** 循环是否生效（入 / 出点均已设置且区间 ≥ 0.5 秒） */
+function loopActive() {
+  return loopIn !== null && loopOut !== null && loopOut - loopIn >= MIN_LOOP;
+}
+
+/** 归一化入 / 出点：限制在 [0, timeline] 内，且区间至少 0.5 秒（必要时回移入点） */
+function normalizeLoop() {
+  if (loopIn !== null) loopIn = Math.max(0, Math.min(loopIn, timeline));
+  if (loopOut !== null) loopOut = Math.max(0, Math.min(loopOut, timeline));
+  if (loopIn !== null && loopOut !== null && loopOut - loopIn < MIN_LOOP) {
+    loopOut = Math.min(timeline, loopIn + MIN_LOOP);
+    loopIn = Math.max(0, loopOut - MIN_LOOP);
+  }
+}
+
+/**
+ * 循环区间变更后无缝重建播放（保持播放 / 暂停状态）：
+ * 当前位置已越过新出点时立即跳回入点；循环未参与播放时不打断当前声音
+ */
+function restartForLoop(pos, wasActive) {
+  const snap = loopActive() && pos >= loopOut;
+  if (playing) {
+    if (!wasActive && !loopActive()) return;
+    stopSource();
+    playing = false;
+    startOffset = snap ? loopIn : pos;
+    play();
+  } else if (snap) {
+    startOffset = loopIn;
+    updateTransport();
+  }
+}
+
+/** 渲染循环状态：按钮高亮、状态行、时间轴上的范围高亮与入 / 出点刻度 */
+function renderLoop() {
+  const inSet = loopIn !== null;
+  const outSet = loopOut !== null;
+  const active = loopActive();
+
+  $('#btnLoopIn').classList.toggle('set', inSet);
+  $('#btnLoopOut').classList.toggle('set', outSet);
+  $('#btnLoopClear').disabled = !inSet && !outSet;
+
+  const info = $('#loopInfo');
+  if (timeline > 0 && timeline < MIN_LOOP) {
+    info.textContent = '音频不足 0.5 秒，无法设置循环';
+  } else if (active) {
+    info.textContent =
+      `循环已启用：${fmt(loopIn)} → ${fmt(loopOut)}（${(loopOut - loopIn).toFixed(1)} 秒）`;
+  } else if (inSet && outSet) {
+    info.textContent = '循环区间过短（至少 0.5 秒）';
+  } else if (inSet) {
+    info.textContent = `入点 ${fmt(loopIn)} · 待设置出点`;
+  } else if (outSet) {
+    info.textContent = `出点 ${fmt(loopOut)} · 待设置入点`;
+  } else {
+    info.textContent = '循环未设置';
+  }
+  info.classList.toggle('on', active);
+
+  // 时间轴下方的循环范围高亮与入 / 出点刻度
+  const region = $('#loopRegion');
+  const showRegion = active && timeline > 0;
+  region.classList.toggle('show', showRegion);
+  if (showRegion) {
+    region.style.left = `${(loopIn / timeline) * 100}%`;
+    region.style.width = `${((loopOut - loopIn) / timeline) * 100}%`;
+  }
+  const edgeIn = $('#loopEdgeIn');
+  const edgeOut = $('#loopEdgeOut');
+  edgeIn.classList.toggle('show', inSet && timeline > 0);
+  edgeOut.classList.toggle('show', outSet && timeline > 0);
+  if (inSet && timeline > 0) edgeIn.style.left = `${(loopIn / timeline) * 100}%`;
+  if (outSet && timeline > 0) edgeOut.style.left = `${(loopOut / timeline) * 100}%`;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +424,14 @@ async function enterTest() {
   timeline = Math.min(buffers.A.duration, buffers.B.duration);
   $('#seek').max = timeline;
 
+  // 片段循环：新会话清空；音频短于 0.5 秒时禁用循环按钮
+  loopIn = null;
+  loopOut = null;
+  const canLoop = timeline >= MIN_LOOP;
+  $('#btnLoopIn').disabled = !canLoop;
+  $('#btnLoopOut').disabled = !canLoop;
+  renderLoop();
+
   // 电平匹配：解码后在统一时间轴内汇总各声道样本计算 RMS
   rms.A = computeRms(buffers.A, timeline);
   rms.B = computeRms(buffers.B, timeline);
@@ -458,6 +570,41 @@ document.querySelectorAll('.src-btn').forEach((b) => {
 
 $('#seek').addEventListener('input', (e) => seekTo(parseFloat(e.target.value)));
 
+// 片段循环：以当前播放位置设置入点 / 出点（先后次序不限），一键清除。
+// 循环区间是全局状态：切换 A / B / X、换题、拖动进度都不会改变它
+$('#btnLoopIn').addEventListener('click', () => {
+  if (timeline < MIN_LOOP) return;
+  const wasActive = loopActive();
+  const pos = position();
+  loopIn = pos;
+  normalizeLoop();
+  restartForLoop(pos, wasActive);
+  renderLoop();
+});
+
+$('#btnLoopOut').addEventListener('click', () => {
+  if (timeline < MIN_LOOP) return;
+  const wasActive = loopActive();
+  const pos = position();
+  loopOut = pos;
+  normalizeLoop();
+  restartForLoop(pos, wasActive);
+  renderLoop();
+});
+
+$('#btnLoopClear').addEventListener('click', () => {
+  const wasActive = loopActive();
+  const pos = position(); // 先取当前实际位置（旧循环配置下的回绕位置）
+  loopIn = loopOut = null;
+  if (playing && wasActive) {
+    stopSource();
+    playing = false;
+    startOffset = pos;
+    play();
+  }
+  renderLoop();
+});
+
 // 电平匹配开关：只改 GainNode 增益，播放位置与播放/暂停状态不受影响
 $('#chkLevelMatch').addEventListener('change', (e) => {
   levelMatchOn = e.target.checked;
@@ -512,6 +659,8 @@ $('#btnAgain').addEventListener('click', async () => {
   refreshLevelMatch(); // 清空调整量显示，增益归零
   currentSrc = 'A';
   startOffset = 0;
+  loopIn = null;
+  loopOut = null;
   $('#fileA').value = '';
   $('#fileB').value = '';
   show('view-upload');

@@ -145,6 +145,59 @@ input[type="range"] {
   cursor: pointer;
 }
 
+/* 片段循环 */
+.loop-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.loop-track {
+  position: relative;
+  height: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.loop-region {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  opacity: 0.75;
+  display: none;
+}
+.loop-region.show { display: block; }
+
+.loop-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent-hover);
+  display: none;
+}
+.loop-edge.show { display: block; }
+
+.loop-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.loop-btns button.set {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+#loopInfo.on {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
 /* 电平匹配 */
 .level-match {
   display: flex;

@@ -67,6 +67,20 @@
         </div>
         <input type="range" id="seek" min="0" max="1" step="0.01" value="0" aria-label="播放进度">
 
+        <div class="loop-ctl">
+          <div class="loop-track" aria-hidden="true">
+            <div class="loop-region" id="loopRegion"></div>
+            <div class="loop-edge" id="loopEdgeIn"></div>
+            <div class="loop-edge" id="loopEdgeOut"></div>
+          </div>
+          <div class="loop-btns">
+            <button id="btnLoopIn" title="以当前播放位置为循环起点">⇤ 设为入点</button>
+            <button id="btnLoopOut" title="以当前播放位置为循环终点；设定后立即从入点开始循环">设为出点 ⇥</button>
+            <button id="btnLoopClear" disabled>清除循环</button>
+          </div>
+          <p id="loopInfo" class="hint" aria-live="polite">循环未设置</p>
+        </div>
+
         <div class="level-match">
           <label class="lm-toggle" title="解码后在统一时间轴内汇总各声道样本计算 RMS，以较安静音源为基准仅衰减较响者（-24～0 dB）；A / B / X 按同一规则生效">
             <input type="checkbox" id="chkLevelMatch">
@@ -86,7 +100,7 @@
         <div id="progress" class="progress" aria-label="答题进度"></div>
 
         <button id="btnSubmit" class="danger" disabled>提交并揭晓答案</button>
-        <p class="hint">提示：在 A / B / X 之间切换时，播放位置与暂停状态保持不变；可随时返回已答题目修改答案，提交后一次性揭晓。</p>
+        <p class="hint">提示：在 A / B / X 之间切换时，播放位置与暂停状态保持不变；可用「设为入点 / 设为出点」循环试听某一片段，切换音源、换题或拖动进度后循环依然有效；可随时返回已答题目修改答案，提交后一次性揭晓。</p>
       </div>
     </section>
 
